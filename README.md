@@ -170,52 +170,22 @@ The Python process is not a second store. It is a talking client of Express. Pos
 
 Worked nutrition example (from the real JSON): 2 rotis → `2 × 40g = 80g` → `297 kcal/100g × 0.8 = 237.6 kcal`.
 
-### Decisions worth calling out
-
-- **Python agent + MERN app.** The PDF asked for MERN and allowed whatever LiveKit supports best. Agents + the eval harness are Python-first.
-- **Server owns nutrition.** `foods.json` is the source of truth. Write bodies only send `foodId`, `quantity`, `unit`.
-- **Nested items, not one row per dish.** One utterance is one meal; edit/delete are per line (`itemId`).
-- **Snapshot macros, recompute on edit.** History should not drift if the JSON changes; a quantity change should use the current catalog.
-- **No auth.** `userId` is always `demo`. Login was not in the feature set.
-- **Polling every 2s.** Voice writes Mongo on another path; the tab is not notified. Polling keeps Talk, a text console, and a refresh in sync. A socket would be nicer; this is correct and small.
-- **Skip Cloud noise cancellation in `console`.** That plugin needs a real LiveKit room; it crashed the job in the local mock room.
-- **No-op guard.** “Make it three rotis” when it is already three does not write, and the agent is instructed to say it is already logged.
-- **`lk agent console` voice on Windows** was unreliable (greeting worked, speech often never became a transcript). **Talk in the browser + `lk agent dev`** is the path that works. Text console (`--text`) is fine for debugging tools.
-
----
-
 ## Incomplete, broken, or I’d do differently
 
 Straight list.
 
 **Broken / rough**
 
-- **Terminal voice (`lk agent console` without `--text`)** on this Windows machine: the agent greets, then often never hears the next utterance. Not the meal API — STT/turn-taking on the fake console room. I would not demo that path.
-- **Frontend `/api` proxy** in this checkout points at a hosted backend. A reviewer starting from an empty machine who does not change `vite.config.ts` will not hit their local Express. I should have left localhost as the default and documented the hosted URL separately.
-- **Backend `pnpm test`** is still the placeholder (`echo` and exit 1). Catalog math, 400s for unknown food / bad unit, no-op edit, and duplicate log are the interesting contract and they are not automated on the Node side.
-- **Duplicate detection** is “same food + unit + quantity on the *latest* meal of that type,” not “same calendar day.” Logging 2 rotis for lunch tomorrow could be treated as a duplicate of yesterday’s lunch. I’d key it by `userId + mealType + local date`.
-- **Search `normalize`** strips a trailing `s` so “rotis” hits `roti`. That can also mangle words (e.g. “glass”). Good enough for this catalog; I’d use aliases-only matching.
-
-**Incomplete (on purpose, or time)**
-
-- No signup. Fine for the brief; I would still not add it without being asked.
-- No push of meal events over LiveKit data channels. Polling works; with more time I’d emit a small “meals-changed” after each successful tool so the page updates immediately and we could poll more slowly.
-- No mute control on the page (Talk / Disconnect only). Easy add; not needed to prove the loop.
-- Agent tests mock HTTP and need LiveKit Inference keys. They cover log / edit / delete / out-of-catalog. They do not cover the no-op “already 3 rotis” path (added later).
-- `foods.json` must stay Beet’s file. If you swap the schema, `catalog.ts` has to follow.
+- **Terminal voice (`lk agent console`).** While testing locally I hit this: after the greeting the agent just sat there listening, no tools, nothing. I looked into it and console mode uses a fake local room, not a real LiveKit Cloud room — that is probably why the mic path died. I did not go much deeper on Windows audio. Instead I switched to `lk agent console --text` to check if tool calling was actually fine. It was. Then I used Talk in the browser with `lk agent dev` (real Cloud room) and that is the path that works. I would demo that, not the terminal mic.
+- **Frontend `/api` proxy** in this repo may still point at a hosted backend. If you want everything on your laptop, set it to `http://127.0.0.1:3001` (see setup above).
+- **No Express tests.** I tested the API by hand and through the agent. I would add real tests for catalog math and the write routes if I had more time.
 
 **What I’d do with more time**
 
-- Express tests with `mongodb-memory-server` (or Atlas in CI) for `resolveItem` and the write routes — that is the nutrition contract.
-- One more agent eval: already-logged quantity → no `update_item` / `unchanged: true` spoken.
-- Date-scoped meals and a clearer “today” on the page (`eatenAt` vs “whatever is in the DB”).
-- Default Vite proxy to `http://127.0.0.1:3001`.
-- Slightly less aggressive catalog search.
+- I thought about WebSockets so the page updates instantly, but I have not used them enough to want that as the only live path on a deadline. I did not want extra moving parts and bugs to chase. Polling `/api/meals` every 2s is enough here: the agent writes Mongo, the page reads Mongo. Later I would add a small push (SSE or LiveKit data) and poll less.
+- Same meal the next day can still count as a duplicate, because the check only looks at the latest meal of that type, not “today”. I would fix that with day/date on the query. I only remembered this after the rest of the app was working.
+- One more agent test for “already 3 rotis” so it does not pretend it updated.
 
 I would **not** add diet plans, photo logging, or a prettier UI. The brief asked for three features done properly.
 
----
-
-## Extra
-
-A longer beginner walkthrough (MERN → LiveKit, line-level notes) is in [`How_This_Project_Works.pdf`](./How_This_Project_Works.pdf).
+First time building a LiveKit voice agent. Debugging this (console vs Talk, tools vs the page) taught me more than the random projects. I actually enjoyed it.
