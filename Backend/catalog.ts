@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { HttpError } from "./errors.js";
 import { findUnit, scaleMacros, type Food, type Macros } from "./models/Food.js";
 
-const catalogPath = join(dirname(fileURLToPath(import.meta.url)), "data", "foods.json");
+const catalogPath = join(process.cwd(), "data", "foods.json");
 
 type CatalogFile = {
   foods: Food[];
