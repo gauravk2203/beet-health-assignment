@@ -12,19 +12,29 @@
 }
 
 h1,
-h2 {
+h2,
+h3 {
   margin: 0;
   color: var(--text-h);
-  text-transform: capitalize;
 }
 
 h1 {
   font-size: 1.6rem;
 }
 
-h2 {
-  font-size: 1.1rem;
+h2.day-title {
+  font-size: 1.15rem;
+  margin: 1.5rem 0 0.75rem;
+}
+
+h3 {
+  font-size: 1rem;
+  text-transform: capitalize;
   margin-bottom: 0.5rem;
+}
+
+.day-group + .day-group {
+  margin-top: 0.5rem;
 }
 
 .status,

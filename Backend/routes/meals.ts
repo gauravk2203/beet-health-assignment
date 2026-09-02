@@ -12,6 +12,15 @@ function userIdFrom(req: { query: Record<string, unknown> }): string {
     : DEFAULT_USER_ID;
 }
 
+/** Local midnight–end for an eatenAt. Same meal next calendar day is not a duplicate. */
+function dayRange(at: Date): { start: Date; end: Date } {
+  const start = new Date(at);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(at);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 function mealId(id: string): mongoose.Types.ObjectId {
   if (!mongoose.isValidObjectId(id)) {
     throw new HttpError(400, "Invalid meal id");
@@ -69,36 +78,42 @@ mealsRouter.post("/", async (req, res, next) => {
     const userId = userIdFrom(req);
     const mealType = parseMealType(body.mealType);
     const items = parseItems(body.items);
+    const eatenAt = body.eatenAt ? new Date(body.eatenAt) : new Date();
+    const { start, end } = dayRange(eatenAt);
 
-    // Same dish + amount + unit already on the latest meal of this type → no insert.
-    const latest = await Meal.findOne({ userId, mealType }).sort({ eatenAt: -1 });
-    if (latest) {
-      const duplicate = items.filter((incoming) =>
-        latest.items.some(
+    const sameDayMeals = await Meal.find({
+      userId,
+      mealType,
+      eatenAt: { $gte: start, $lte: end },
+    }).sort({ eatenAt: -1 });
+
+    const duplicate = items.filter((incoming) =>
+      sameDayMeals.some((meal) =>
+        meal.items.some(
           (existing) =>
             existing.foodId === incoming.foodId &&
             existing.unit === incoming.unit &&
             Number(existing.quantity) === incoming.quantity,
         ),
-      );
-      if (duplicate.length === items.length) {
-        const names = duplicate
-          .map((row) => `${row.quantity} ${row.foodName}`)
-          .join(" and ");
-        res.json({
-          meal: latest,
-          unchanged: true,
-          alreadyPresent: true,
-          message: `${names} already logged for ${mealType}. Nothing was added.`,
-        });
-        return;
-      }
+      ),
+    );
+    if (sameDayMeals.length > 0 && duplicate.length === items.length) {
+      const names = duplicate
+        .map((row) => `${row.quantity} ${row.foodName}`)
+        .join(" and ");
+      res.json({
+        meal: sameDayMeals[0],
+        unchanged: true,
+        alreadyPresent: true,
+        message: `${names} already logged for ${mealType} that day. Nothing was added.`,
+      });
+      return;
     }
 
     const meal = await Meal.create({
       userId,
       mealType,
-      eatenAt: body.eatenAt ? new Date(body.eatenAt) : new Date(),
+      eatenAt,
       items,
     });
     res.status(201).json({ meal, unchanged: false });

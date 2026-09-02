@@ -183,7 +183,7 @@ Straight list.
 **What I’d do with more time**
 
 - I thought about WebSockets so the page updates instantly, but I have not used them enough to want that as the only live path on a deadline. I did not want extra moving parts and bugs to chase. Polling `/api/meals` every 2s is enough here: the agent writes Mongo, the page reads Mongo. Later I would add a small push (SSE or LiveKit data) and poll less.
-- Same meal the next day can still count as a duplicate, because the check only looks at the latest meal of that type, not “today”. I would fix that with day/date on the query. I only remembered this after the rest of the app was working.
+- Same lunch the next day is a new day: duplicate check uses `eatenAt` within local midnight–midnight, not “latest meal of that type ever.” The page groups by date (Today / Yesterday / date). “Delete yesterday’s chai” is list_meals with from/to for that day, then delete_item.
 - One more agent test for “already 3 rotis” so it does not pretend it updated.
 
 I would **not** add diet plans, photo logging, or a prettier UI. The brief asked for three features done properly.

@@ -31,6 +31,29 @@ function formatMacros(m: Macros): string {
   return `${m.calories.toFixed(0)} kcal · P ${m.protein.toFixed(0)} · C ${m.carbs.toFixed(0)} · F ${m.fat.toFixed(0)}`;
 }
 
+function dayKey(value: string | Date): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dayLabel(key: string): string {
+  const today = dayKey(new Date());
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yesterday = dayKey(y);
+  if (key === today) return "Today";
+  if (key === yesterday) return "Yesterday";
+  const [yy, mm, dd] = key.split("-");
+  return new Date(Number(yy), Number(mm) - 1, Number(dd)).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export default function App() {
   // Fetches a JWT from Express. LIVEKIT_API_SECRET never ships in this bundle.
   const tokenSource = useMemo(() => TokenSource.endpoint("/api/livekit/token"), []);
@@ -67,11 +90,12 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
     return () => window.clearInterval(id);
   }, [refresh]);
 
-  const dayTotals = meals.reduce((sum, meal) => addMacros(sum, meal.totals), emptyMacros());
-  const grouped = MEAL_ORDER.map((type) => ({
-    type,
-    meals: meals.filter((meal) => meal.mealType === type),
-  })).filter((group) => group.meals.length > 0);
+  const byDay = meals.reduce<Record<string, Meal[]>>((acc, meal) => {
+    const key = dayKey(meal.eatenAt);
+    (acc[key] ??= []).push(meal);
+    return acc;
+  }, {});
+  const days = Object.keys(byDay).sort((a, b) => (a < b ? 1 : -1));
 
   const connected = session.connectionState === "connected";
 
@@ -111,31 +135,48 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
 
       {error ? <p className="error">{error}</p> : null}
 
-      <p className="totals">Today · {formatMacros(dayTotals)}</p>
-
-      {grouped.length === 0 ? (
+      {days.length === 0 ? (
         <p className="empty">No meals yet. Press Talk and say what you ate.</p>
       ) : (
-        grouped.map((group) => (
-          <section key={group.type} className="meal-group">
-            <h2>{group.type}</h2>
-            {group.meals.map((meal) => (
-              <article key={meal._id} className="meal">
-                <ul>
-                  {meal.items.map((item) => (
-                    <li key={item.itemId}>
-                      <span>
-                        {item.quantity} × {item.foodName} ({item.unit}, {item.grams}g)
-                      </span>
-                      <span>{formatMacros(item.macros)}</span>
-                    </li>
+        days.map((key) => {
+          const dayMeals = byDay[key];
+          const dayTotals = dayMeals.reduce(
+            (sum, meal) => addMacros(sum, meal.totals),
+            emptyMacros(),
+          );
+          const grouped = MEAL_ORDER.map((type) => ({
+            type,
+            meals: dayMeals.filter((meal) => meal.mealType === type),
+          })).filter((group) => group.meals.length > 0);
+
+          return (
+            <section key={key} className="day-group">
+              <h2 className="day-title">
+                {dayLabel(key)} · {formatMacros(dayTotals)}
+              </h2>
+              {grouped.map((group) => (
+                <div key={group.type} className="meal-group">
+                  <h3>{group.type}</h3>
+                  {group.meals.map((meal) => (
+                    <article key={meal._id} className="meal">
+                      <ul>
+                        {meal.items.map((item) => (
+                          <li key={item.itemId}>
+                            <span>
+                              {item.quantity} × {item.foodName} ({item.unit}, {item.grams}g)
+                            </span>
+                            <span>{formatMacros(item.macros)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="meal-total">Meal total · {formatMacros(meal.totals)}</p>
+                    </article>
                   ))}
-                </ul>
-                <p className="meal-total">Meal total · {formatMacros(meal.totals)}</p>
-              </article>
-            ))}
-          </section>
-        ))
+                </div>
+              ))}
+            </section>
+          );
+        })
       )}
     </div>
   );

@@ -43,7 +43,8 @@ INSTRUCTIONS = textwrap.dedent(
     # Logging
     - Need a meal type: breakfast, lunch, dinner, or snack. Ask if missing.
     - Need a quantity. Ask if missing.
-    - Call list_meals first when they may already have that meal. If the same dish, amount, and unit are already there, do not call log_meal. Say it is already logged.
+    - Call list_meals first when they may already have that meal. If the same dish, amount, and unit are already there that day, do not call log_meal. Say it is already logged.
+    - Same lunch tomorrow is a new day. Do not treat yesterday as a duplicate.
     - After a successful log, say the dish names, amounts, units, and calories from the tool result. Never guess calories.
     - If log_meal returns unchanged or alreadyPresent, say that it was already there. Do not claim you added it.
 
@@ -52,7 +53,9 @@ INSTRUCTIONS = textwrap.dedent(
     - "Make that three rotis" is an update of that roti line, not a new log.
     - If list_meals already shows that amount, do not call update_item. Say it is already three rotis, or whatever the current amount is.
     - If two matching lines exist, ask which one. Do not guess.
-    - For "this morning", pass a from/to range into list_meals.
+    - When they say today, yesterday, or this morning, pass from_iso and to_iso on list_meals (and eaten_at on log_meal if they are logging in the past).
+      Today: from local midnight to end of today. Yesterday: that full day. This morning: today midnight to noon.
+    - "Delete yesterday's chai" → list_meals for yesterday, then delete_item on that chai line.
     - After a successful edit or delete, confirm using the tool result.
     - If update_item returns unchanged, say nothing was changed because it was already that way. Do not claim you updated it.
 
@@ -90,8 +93,8 @@ class Assistant(Agent):
         """List saved meals. Call this before edit or delete so you can pick the right item.
 
         Args:
-            from_iso: Optional start of a time range in ISO format, for this morning or today.
-            to_iso: Optional end of a time range in ISO format.
+            from_iso: Start of the day or window in ISO format. Use for today, yesterday, this morning.
+            to_iso: End of that window in ISO format.
         """
         logger.info("list_meals from=%s to=%s", from_iso, to_iso)
         return await api.list_meals(from_iso, to_iso)
