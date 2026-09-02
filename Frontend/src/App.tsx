@@ -27,8 +27,23 @@ function addMacros(a: Macros, b: Macros): Macros {
   };
 }
 
-function formatMacros(m: Macros): string {
-  return `${m.calories.toFixed(0)} kcal · P ${m.protein.toFixed(0)} · C ${m.carbs.toFixed(0)} · F ${m.fat.toFixed(0)}`;
+function MacroPills({ m }: { m: Macros }) {
+  return (
+    <div className="macros">
+      <b>{Math.round(m.calories)} kcal</b>
+      <span>P {m.protein.toFixed(0)}</span>
+      <span>C {m.carbs.toFixed(0)}</span>
+      <span>F {m.fat.toFixed(0)}</span>
+    </div>
+  );
+}
+
+function statusLabel(connected: boolean, state: string): string {
+  if (!connected) return "Disconnected";
+  if (state === "listening") return "Listening";
+  if (state === "thinking" || state === "generating") return "Thinking";
+  if (state === "speaking") return "Speaking";
+  return state.replaceAll("_", " ");
 }
 
 function dayKey(value: string | Date): string {
@@ -102,23 +117,22 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
   return (
     <div className="page">
       <header className="top">
-        <div>
+        <div className="brand">
+          <p className="eyebrow">Beet</p>
           <h1>Meal log</h1>
-          <p className="status">
-            {connected ? `Agent: ${agent.state}` : "disconnected"}
+          <p className={`status${connected ? " live" : ""}`}>
+            {statusLabel(connected, agent.state)}
           </p>
         </div>
-        <div className="controls">
-          {!connected ? (
-            <button type="button" onClick={() => void session.start()}>
-              Talk
-            </button>
-          ) : (
-            <button type="button" className="secondary" onClick={() => void session.end()}>
-              Disconnect
-            </button>
-          )}
-        </div>
+        {!connected ? (
+          <button type="button" className="talk" onClick={() => void session.start()}>
+            Talk
+          </button>
+        ) : (
+          <button type="button" className="talk hangup" onClick={() => void session.end()}>
+            Hang up
+          </button>
+        )}
       </header>
 
       {connected ? (
@@ -126,9 +140,8 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
           {agent.canListen && agent.microphoneTrack ? (
             <BarVisualizer track={agent.microphoneTrack} state={agent.state} barCount={7} />
           ) : (
-            <p className="hint">Listening… say what you ate.</p>
+            <p className="hint">Say what you ate — log, edit, or delete.</p>
           )}
-          {/* Plays the agent's TTS track. Without this the session is silent. */}
           <RoomAudioRenderer />
         </div>
       ) : null}
@@ -136,7 +149,10 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
       {error ? <p className="error">{error}</p> : null}
 
       {days.length === 0 ? (
-        <p className="empty">No meals yet. Press Talk and say what you ate.</p>
+        <div className="empty">
+          <strong>Nothing logged yet</strong>
+          Press Talk and say what you ate.
+        </div>
       ) : (
         days.map((key) => {
           const dayMeals = byDay[key];
@@ -151,9 +167,10 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
 
           return (
             <section key={key} className="day-group">
-              <h2 className="day-title">
-                {dayLabel(key)} · {formatMacros(dayTotals)}
-              </h2>
+              <div className="day-head">
+                <h2>{dayLabel(key)}</h2>
+                <span className="day-kcal">{Math.round(dayTotals.calories)} kcal</span>
+              </div>
               {grouped.map((group) => (
                 <div key={group.type} className="meal-group">
                   <h3>{group.type}</h3>
@@ -162,14 +179,20 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
                       <ul>
                         {meal.items.map((item) => (
                           <li key={item.itemId}>
-                            <span>
-                              {item.quantity} × {item.foodName} ({item.unit}, {item.grams}g)
-                            </span>
-                            <span>{formatMacros(item.macros)}</span>
+                            <div>
+                              <span className="item-name">{item.foodName}</span>
+                              <span className="item-meta">
+                                {item.quantity} {item.unit} · {item.grams}g
+                              </span>
+                            </div>
+                            <MacroPills m={item.macros} />
                           </li>
                         ))}
                       </ul>
-                      <p className="meal-total">Meal total · {formatMacros(meal.totals)}</p>
+                      <p className="meal-total">
+                        <span>Meal total</span>
+                        <MacroPills m={meal.totals} />
+                      </p>
                     </article>
                   ))}
                 </div>
