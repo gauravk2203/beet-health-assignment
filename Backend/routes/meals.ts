@@ -1,0 +1,192 @@
+import { Router } from "express";
+import mongoose from "mongoose";
+import { resolveItem } from "../catalog.js";
+import { HttpError } from "../errors.js";
+import { DEFAULT_USER_ID, MEAL_TYPES, Meal, type MealType } from "../models/Meal.js";
+
+const mealsRouter = Router();
+
+function userIdFrom(req: { query: Record<string, unknown> }): string {
+  return typeof req.query.userId === "string" && req.query.userId.trim()
+    ? req.query.userId.trim()
+    : DEFAULT_USER_ID;
+}
+
+function mealId(id: string): mongoose.Types.ObjectId {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new HttpError(400, "Invalid meal id");
+  }
+  return new mongoose.Types.ObjectId(id);
+}
+
+function parseMealType(value: unknown): MealType {
+  if (typeof value !== "string" || !MEAL_TYPES.includes(value as MealType)) {
+    throw new HttpError(400, `mealType must be one of: ${MEAL_TYPES.join(", ")}`);
+  }
+  return value as MealType;
+}
+
+function parseItems(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new HttpError(400, "items must be a non-empty array");
+  }
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new HttpError(400, `items[${index}] is invalid`);
+    }
+    const row = item as { foodId?: unknown; quantity?: unknown; unit?: unknown };
+    if (typeof row.foodId !== "string" || typeof row.unit !== "string") {
+      throw new HttpError(400, `items[${index}] needs foodId and unit`);
+    }
+    return resolveItem({
+      foodId: row.foodId,
+      quantity: Number(row.quantity),
+      unit: row.unit,
+    });
+  });
+}
+
+mealsRouter.get("/", async (req, res, next) => {
+  try {
+    const filter: Record<string, unknown> = { userId: userIdFrom(req) };
+    const range: { $gte?: Date; $lte?: Date } = {};
+    if (typeof req.query.from === "string") range.$gte = new Date(req.query.from);
+    if (typeof req.query.to === "string") range.$lte = new Date(req.query.to);
+    if (range.$gte || range.$lte) filter.eatenAt = range;
+
+    const meals = await Meal.find(filter).sort({ eatenAt: -1 }).lean();
+    res.json({ meals });
+  } catch (error) {
+    next(error);
+  }
+});
+
+mealsRouter.post("/", async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const userId = userIdFrom(req);
+    const mealType = parseMealType(body.mealType);
+    const items = parseItems(body.items);
+
+    const latest = await Meal.findOne({ userId, mealType }).sort({ eatenAt: -1 });
+    if (latest) {
+      const duplicate = items.filter((incoming) =>
+        latest.items.some(
+          (existing) =>
+            existing.foodId === incoming.foodId &&
+            existing.unit === incoming.unit &&
+            Number(existing.quantity) === incoming.quantity,
+        ),
+      );
+      if (duplicate.length === items.length) {
+        const names = duplicate
+          .map((row) => `${row.quantity} ${row.foodName}`)
+          .join(" and ");
+        res.json({
+          meal: latest,
+          unchanged: true,
+          alreadyPresent: true,
+          message: `${names} already logged for ${mealType}. Nothing was added.`,
+        });
+        return;
+      }
+    }
+
+    const meal = await Meal.create({
+      userId,
+      mealType,
+      eatenAt: body.eatenAt ? new Date(body.eatenAt) : new Date(),
+      items,
+    });
+    res.status(201).json({ meal, unchanged: false });
+  } catch (error) {
+    next(error);
+  }
+});
+
+mealsRouter.patch("/:mealId/items/:itemId", async (req, res, next) => {
+  try {
+    const meal = await Meal.findOne({
+      _id: mealId(req.params.mealId),
+      userId: userIdFrom(req),
+    });
+    if (!meal) throw new HttpError(404, "Meal not found");
+
+    const item = meal.items.find((row) => row.itemId === req.params.itemId);
+    if (!item) throw new HttpError(404, "Item not found");
+
+    const body = req.body ?? {};
+    const foodId = typeof body.foodId === "string" ? body.foodId : item.foodId;
+    const unit = typeof body.unit === "string" ? body.unit : item.unit;
+    const quantity = body.quantity !== undefined ? Number(body.quantity) : item.quantity;
+
+    const resolved = resolveItem({ foodId, unit, quantity });
+    const alreadySame =
+      item.foodId === resolved.foodId &&
+      item.unit === resolved.unit &&
+      Number(item.quantity) === resolved.quantity;
+
+    if (alreadySame) {
+      res.json({
+        meal,
+        unchanged: true,
+        message: `${resolved.quantity} ${resolved.foodName} is already logged that way. Nothing was changed.`,
+      });
+      return;
+    }
+
+    item.foodId = resolved.foodId;
+    item.foodName = resolved.foodName;
+    item.unit = resolved.unit;
+    item.quantity = resolved.quantity;
+    item.grams = resolved.grams;
+    item.macros = resolved.macros;
+
+    await meal.save();
+    res.json({ meal, unchanged: false });
+  } catch (error) {
+    next(error);
+  }
+});
+
+mealsRouter.delete("/:mealId/items/:itemId", async (req, res, next) => {
+  try {
+    const meal = await Meal.findOne({
+      _id: mealId(req.params.mealId),
+      userId: userIdFrom(req),
+    });
+    if (!meal) throw new HttpError(404, "Meal not found");
+
+    const nextItems = meal.items.filter((row) => row.itemId !== req.params.itemId);
+    if (nextItems.length === meal.items.length) {
+      throw new HttpError(404, "Item not found");
+    }
+
+    if (nextItems.length === 0) {
+      await meal.deleteOne();
+      res.json({ meal: null, deletedMeal: true });
+      return;
+    }
+
+    meal.items = nextItems as typeof meal.items;
+    await meal.save();
+    res.json({ meal, deletedMeal: false });
+  } catch (error) {
+    next(error);
+  }
+});
+
+mealsRouter.delete("/:mealId", async (req, res, next) => {
+  try {
+    const result = await Meal.findOneAndDelete({
+      _id: mealId(req.params.mealId),
+      userId: userIdFrom(req),
+    });
+    if (!result) throw new HttpError(404, "Meal not found");
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+export default mealsRouter;

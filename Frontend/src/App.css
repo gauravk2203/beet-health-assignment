@@ -1,0 +1,95 @@
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+h1,
+h2 {
+  margin: 0;
+  color: var(--text-h);
+  text-transform: capitalize;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.status,
+.hint,
+.empty,
+.totals,
+.meal-total {
+  margin: 0.25rem 0 0;
+  color: var(--text);
+}
+
+.controls button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.controls .secondary {
+  background: transparent;
+  color: var(--text-h);
+}
+
+.voice {
+  margin: 1rem 0;
+  min-height: 4rem;
+}
+
+.error {
+  color: #b42318;
+}
+
+.meal-group {
+  margin-top: 1.5rem;
+}
+
+.meal {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.meal ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.meal li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.meal li:last-child {
+  border-bottom: 0;
+}
+
+.meal-total {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
