@@ -5,6 +5,7 @@ import { addMacros, emptyMacros, type Macros } from "./Food.js";
 export const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 export type MealType = (typeof MEAL_TYPES)[number];
 
+/** No auth in this assignment; every log belongs to this user. */
 export const DEFAULT_USER_ID = "demo";
 
 const macrosSchema = new Schema<Macros>(
@@ -25,6 +26,7 @@ const mealItemSchema = new Schema(
     quantity: { type: Number, required: true, min: 0.01 },
     unit: { type: String, required: true },
     grams: { type: Number, required: true, min: 0 },
+    // Snapshot at save time so old logs do not change if foods.json is edited later.
     macros: { type: macrosSchema, required: true },
   },
   { _id: false },
@@ -34,6 +36,7 @@ const mealSchema = new Schema(
   {
     userId: { type: String, required: true, default: DEFAULT_USER_ID, index: true },
     mealType: { type: String, required: true, enum: MEAL_TYPES },
+    // When they ate, not when we saved — needed for "chai this morning".
     eatenAt: { type: Date, required: true, default: () => new Date() },
     items: {
       type: [mealItemSchema],
@@ -52,6 +55,7 @@ mealSchema.index({ userId: 1, eatenAt: -1 });
 mealSchema.index({ "items.itemId": 1 });
 mealSchema.index({ "items.foodId": 1 });
 
+// Recompute on every validate/save so React never has to sum calories.
 mealSchema.pre("validate", function setTotals() {
   this.totals = (this.items ?? []).reduce(
     (sum, item) => addMacros(sum, item.macros ?? emptyMacros()),

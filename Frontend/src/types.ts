@@ -14,6 +14,7 @@ export type MealItem = {
   quantity: number;
   unit: string;
   grams: number;
+  /** Copied from the catalog at save time — do not recompute in the UI. */
   macros: Macros;
 };
 

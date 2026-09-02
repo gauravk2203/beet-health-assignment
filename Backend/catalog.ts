@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { HttpError } from "./errors.js";
 import { findUnit, scaleMacros, type Food, type Macros } from "./models/Food.js";
 
+// Loaded once at boot. foods.json is the source of truth — not a Mongo collection.
 const catalogPath = join(process.cwd(), "data", "foods.json");
 
 type CatalogFile = {
@@ -17,6 +18,7 @@ if (!Array.isArray(parsed.foods)) {
 const foods: Food[] = parsed.foods;
 const byId = new Map(foods.map((food) => [food.id, food]));
 
+// Strip a trailing "s" so spoken "rotis" still hits id "roti".
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/s\b/g, "");
 }
@@ -42,6 +44,7 @@ export function searchFoods(query: string): Food[] {
   });
 }
 
+/** Validate catalog + unit, then compute grams and macros. Never trust client calories. */
 export function resolveItem(input: {
   foodId: string;
   quantity: number;

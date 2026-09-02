@@ -1,4 +1,8 @@
-/** Matches Beet foods.json: macros per 100g, units as gram weights. */
+/**
+ * Shape of one dish in foods.json.
+ * Macros are per 100g; each household unit only stores its gram weight.
+ * Calories for a log line are always quantity * unit.grams / 100 * macrosPer100g.
+ */
 
 export const MACRO_KEYS = ["calories", "protein", "carbs", "fat"] as const;
 export type MacroKey = (typeof MACRO_KEYS)[number];

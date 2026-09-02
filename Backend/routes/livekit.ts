@@ -4,6 +4,7 @@ import { AccessToken } from "livekit-server-sdk";
 import { RoomAgentDispatch, RoomConfiguration } from "@livekit/protocol";
 import { HttpError } from "../errors.js";
 
+// Must match @server.rtc_session(agent_name=...) in voice-agent/src/agent.py.
 const AGENT_NAME = "meal-logger";
 const livekitRouter = Router();
 
@@ -25,6 +26,7 @@ livekitRouter.post("/token", async (req, res, next) => {
     const roomName = body.room_name || `meal-${randomUUID()}`;
     const identity = body.participant_identity || `user-${randomUUID()}`;
 
+    // Secret stays on the server. Browser only gets this short-lived JWT.
     const token = new AccessToken(apiKey, apiSecret, {
       identity,
       name: body.participant_name || "user",

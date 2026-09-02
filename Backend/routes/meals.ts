@@ -26,6 +26,7 @@ function parseMealType(value: unknown): MealType {
   return value as MealType;
 }
 
+/** Attach grams + macros from foods.json. Request bodies must not send calories. */
 function parseItems(value: unknown) {
   if (!Array.isArray(value) || value.length === 0) {
     throw new HttpError(400, "items must be a non-empty array");
@@ -50,6 +51,7 @@ mealsRouter.get("/", async (req, res, next) => {
   try {
     const filter: Record<string, unknown> = { userId: userIdFrom(req) };
     const range: { $gte?: Date; $lte?: Date } = {};
+    // Optional ISO window so the agent can ask for "this morning".
     if (typeof req.query.from === "string") range.$gte = new Date(req.query.from);
     if (typeof req.query.to === "string") range.$lte = new Date(req.query.to);
     if (range.$gte || range.$lte) filter.eatenAt = range;
@@ -68,6 +70,7 @@ mealsRouter.post("/", async (req, res, next) => {
     const mealType = parseMealType(body.mealType);
     const items = parseItems(body.items);
 
+    // Same dish + amount + unit already on the latest meal of this type → no insert.
     const latest = await Meal.findOne({ userId, mealType }).sort({ eatenAt: -1 });
     if (latest) {
       const duplicate = items.filter((incoming) =>
@@ -126,6 +129,7 @@ mealsRouter.patch("/:mealId/items/:itemId", async (req, res, next) => {
       item.unit === resolved.unit &&
       Number(item.quantity) === resolved.quantity;
 
+    // "Make it 3 rotis" when it is already 3 — do not write, tell the agent to say so.
     if (alreadySame) {
       res.json({
         meal,
@@ -163,6 +167,7 @@ mealsRouter.delete("/:mealId/items/:itemId", async (req, res, next) => {
     }
 
     if (nextItems.length === 0) {
+      // Schema forbids empty items[]; drop the meal so the page has no blank card.
       await meal.deleteOne();
       res.json({ meal: null, deletedMeal: true });
       return;

@@ -1,3 +1,5 @@
+"""HTTP client for the Express meal API. The agent never talks to Mongo directly."""
+
 import os
 from typing import Any
 
@@ -14,6 +16,7 @@ async def _request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
     except ValueError:
         payload = {"error": response.text or "Invalid response from meal API"}
 
+    # 4xx/5xx become {ok: false} so the LLM can speak the error instead of crashing the turn.
     if response.is_error:
         message = payload.get("error") if isinstance(payload, dict) else None
         return {

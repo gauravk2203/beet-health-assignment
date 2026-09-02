@@ -32,7 +32,9 @@ function formatMacros(m: Macros): string {
 }
 
 export default function App() {
+  // Fetches a JWT from Express. LIVEKIT_API_SECRET never ships in this bundle.
   const tokenSource = useMemo(() => TokenSource.endpoint("/api/livekit/token"), []);
+  // agentName must match the Python worker's rtc_session name.
   const session = useSession(tokenSource, { agentName: "meal-logger" });
 
   return (
@@ -59,6 +61,8 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
 
   useEffect(() => {
     void refresh();
+    // Voice writes Mongo on the server; this tab is not told. Poll so Talk and
+    // a text-console session in another window both show up without a reload.
     const id = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(id);
   }, [refresh]);
@@ -100,6 +104,7 @@ function Page({ session }: { session: ReturnType<typeof useSession> }) {
           ) : (
             <p className="hint">Listening… say what you ate.</p>
           )}
+          {/* Plays the agent's TTS track. Without this the session is silent. */}
           <RoomAudioRenderer />
         </div>
       ) : null}

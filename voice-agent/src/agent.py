@@ -66,6 +66,7 @@ class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
             instructions=INSTRUCTIONS,
+            # Must sit on the Agent (or AgentSession). Missing this crashes generate_reply.
             llm=inference.LLM(model="google/gemma-4-31b-it"),
         )
 
@@ -155,6 +156,7 @@ class Assistant(Agent):
 server = AgentServer()
 
 
+# Name the frontend token route dispatches. Mismatch = Talk joins an empty room.
 @server.rtc_session(agent_name="meal-logger")
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {
@@ -162,6 +164,7 @@ async def my_agent(ctx: JobContext):
     }
 
     session = AgentSession(
+        # STT / TTS / turn detector all go through LiveKit Inference (one Cloud key).
         stt=inference.STT(model="assemblyai/universal-3-5-pro", language="en"),
         tts=inference.TTS(
             model="fishaudio/s2.1-pro", voice="fa4c9eb3dccc4806b382b40d61c6b10a"
